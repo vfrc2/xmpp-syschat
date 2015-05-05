@@ -1,0 +1,61 @@
+Jabber System Chatbot
+
+
+syschat -c <file> [sup...] server | send "message" [-u "user"]
+
+	server 			run client and wait for messages from pipe or from jabber
+
+	-c config 		config file yaml
+	
+	xmpp:
+	-s --server		ip or url of jabber server host[:port=5222]
+	-u --user		jid account for auth name@server
+	-p --passwd		password
+	--passfile		file wich store password
+
+
+	message_pipe:
+	--pipe-file		file path to create fifo pipe
+	--tojid			jid account(s) for send messages
+
+
+	cmd_exec:
+	--chroot		chrootdir for commands def="~"
+	--filter		type of filter can be a(llow) or d(eny)
+	--users			list of user allowed or denied to exec commands
+    
+    ===========================
+		
+	send "message"	send message to message pipe from config
+
+	-u --user 		jid or jids to send messages	
+
+
+	over:
+	--pid			pid file with config and id of runing server
+
+
+
+Commands:
+	Can be any executable script, all of output piped to message. in dir can be files with  <.info.{cmd_name}> with description for command when call help and <.info> with server desc 
+
+Config:
+
+xmpp:
+  login:f6server@vfrc2.paata.ru
+  #server: #if not same as host 
+  password: 1234 #password
+  keepalive: yes
+  keepalive_interval: 1.5 #sec
+
+message_pipe: 
+  pfile:./message.pipe 
+  to: vfrc2@vfrc2@vfrc2.paata.ru #can be list
+
+cmd_exec:
+  chroot: ./commands
+  filter: allow #deny
+  users: 
+    - vfrc2@vfrc2@vfrc2.paata.ru 
+
+
