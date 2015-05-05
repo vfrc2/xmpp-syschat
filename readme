@@ -1,5 +1,6 @@
 Jabber System Chatbot
 
+XMPP chatbot, what execute scripts and piped output to message
 
 syschat -c <file> [sup...] server | send "message" [-u "user"]
 

@@ -1,17 +1,17 @@
 xmpp:
-  login:f6server@vfrc2.paata.ru
-  #server: #if not same as host 
-  password: 1234 #password
+  login: "f6server@vfrc2.paata.ru"
+##server: #if not same as host 
+  password: "1234" #password
   keepalive: yes
   keepalive_interval: 1.5 #sec
 
 message_pipe: 
-  pfile:./message.pipe 
-  to: vfrc2@vfrc2@vfrc2.paata.ru #can be list
+  pipe-file: "./message.pipe" 
+  to: "vfrc2@vfrc2@vfrc2.paata.ru" #can be list
 
 cmd_exec:
-  chroot: ./commands
+  chroot: "./commands"
   filter: allow #deny
   users: 
-    - vfrc2@vfrc2@vfrc2.paata.ru 
+    - "vfrc2@vfrc2@vfrc2.paata.ru"
 

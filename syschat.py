@@ -1,5 +1,7 @@
 import xmpp, sys, logging, os, threading, time
 import traceback
+import argparse
+import yaml
 from chat import SysChat
 
 
@@ -7,9 +9,16 @@ logging.basicConfig(level=logging.DEBUG)
 
 log = logging.getLogger(__name__)
 
+args = None
+
 ch = None
 
-secure_type_white = False
+login = None
+password = None
+server = None
+
+chroot = '/tmp'
+secure_black = False
 secure_users = [] #list of user what can run commands
 
 keep_alive = True
@@ -21,20 +30,23 @@ pipeLoop = None
 isReadPipe = False
 isReceiveMes = False
 
-send_mes_pipe = './message.pipe'
+send_mes_pipe = None
 send_user_list = [] #user to send message from mes pipe
 
 def main():
-	global log
+	global log, args
 	global ch, keep_alive, keep_alive_interval
 	global send_user_list
 	
 	print "Jabber Sys Chat"
 
-	#loading config
+	args = parseArgs()
+
+	if args.config:
+		loadConfig(args)
 
 	secure_black = False
-	secure_users = #[xmpp.JID("vfrc2@vfrc2.paata.ru")] #enable whitelist
+	secure_users = [] #[xmpp.JID("vfrc2@vfrc2.paata.ru")] #enable whitelist
 	
 	send_user_list = [xmpp.JID("vfrc2@vfrc2.paata.ru"),]
 
@@ -67,15 +79,21 @@ def setupChat(args=None):
 	global log
 	global ch, receiveLoop, pipeLoop
 	global isReadPipe, isReceiveMes
+	global login, password
 
 	isReadPipe = True
 	isReceiveMes = True
 
 	ch = SysChat()
 
-	ch.server_url = "vfrc2.paata.ru"
-	ch.user = xmpp.JID("f6server@vfrc2.paata.ru")
-	ch.password = "1234"
+	ch.user = login
+
+
+
+	if not server:
+		ch.server_url = login.getDomain()
+
+	ch.password = password
 
 	try:
 		ch.connectAndAuth()
@@ -123,6 +141,137 @@ def cleanChat():
 
 	pass
 
+def parseArgs():
+
+	parser = argparse.ArgumentParser(\
+		description='XMPP chatbot, what execute scripts and piped output to message')
+	
+	parser.add_argument('--pid', nargs=1, help="path to pid file")
+
+	serv = parser.add_argument_group('server',\
+		description="run client and wait for messages from pipe or from jabber")
+	
+	serv.add_argument('-c','--config', nargs='?',\
+	 	help="config file yaml")
+	serv.add_argument('-s','--xmpp-server', nargs=1,\
+		help="ip or url of jabber server host[:port=5222]")
+	serv.add_argument('-u','--user', nargs=1,\
+		help="jid account for auth name@server")
+	serv.add_argument('-p','--password', nargs=1,\
+		help="password")
+	serv.add_argument('--passfile', nargs=1,\
+		help="file which store password")
+
+	serv.add_argument('--pipe-file', nargs=1,\
+		help="file path to create fifo pipe")
+	serv.add_argument('--to-jid', nargs='*',\
+		help="jid account(s) for send messages")
+
+	serv.add_argument('--chroot', nargs=1,\
+		help="chrootdir for commands def=\"~\"")
+	serv.add_argument('--filter', nargs=1,\
+		choices=['allow','deny'],\
+		help="type of filter can be a(llow) or d(eny)")
+	serv.add_argument('--users', nargs='*',\
+		help="list of user allowed or denied to exec commands")
+	serv.add_argument('--server', action='store_true',\
+		help="run client and wait for messages from pipe or from jabber",\
+		required= False)
+
+	snd = parser.add_argument_group('send',\
+		description="send message to message pipe from config")
+
+	snd.add_argument('--send', nargs=1, \
+		help="send MESSAGE", required= False)
+
+	
+
+	return parser.parse_args()
+
+def loadConfig(args):
+
+	global login
+	global password
+	global server
+
+	global chroot
+	global secure_black
+	global secure_users
+
+	global keep_alive 
+	global keep_alive_interval
+
+	global send_mes_pipe
+	global send_user_list
+
+	print args.config
+
+	cfg = yaml.load(open(args.config))
+
+	cxmpp = cfg['xmpp']
+
+	if not cxmpp:
+		raise Exception("Wrong config need xmpp section")
+
+	if 'login' in cxmpp.keys():
+		login = xmpp.JID(cxmpp['login'])
+
+	if 'password' in cxmpp.keys():
+		password = cxmpp['password']
+
+	if 'passfile' in cxmpp.keys():
+		password = open(cxmpp['passfile'],'r').readline()
+
+	if 'server' in cxmpp.keys():
+		server = cxmpp['server']
+
+	if 'keepalive' in cxmpp.keys():
+		keep_alive = cxmpp['keepalive']
+
+	if 'keepalive-interval' in cxmpp.keys():
+		keep_alive_interval = cxmpp['keepalive-interval']
+
+
+	cmessage_pipe = cfg['message_pipe']
+
+	print cmessage_pipe
+
+	if cmessage_pipe:
+		if 'pipe-file' in cmessage_pipe.keys():
+			send_mes_pipe = cmessage_pipe['pipe-file']
+
+		send_user_list = []
+
+		if 'to' in cmessage_pipe.keys():
+			if type(cmessage_pipe['to']) == list:
+				send_user_list = cmessage_pipe['to']
+			else:
+				send_user_list = [str(cmessage_pipe['to'])]
+
+	ccommand = cfg['cmd_exec']
+
+	if ccommand:
+		if 'chroot' in ccommand.keys():
+			chroot = ccommand['chroot']
+
+		if 'filter' in ccommand.keys() and \
+				ccommand['chroot'] == 'deny':
+			secure_black = True
+
+		if 'users' in ccommand.keys():
+			if type(ccommand['users']) == list:
+				secure_users = ccommand['users']
+			else:
+				secure_users = [str(ccommand['users'])]
+
+
+
+def loadArgs(args):
+	pass
+
+
+
+
 def receiveMessageLoop():
 
 	global isReceiveMes, ch
@@ -144,6 +293,10 @@ def fileMessagesLoop():
 	global log, ch, send_user_list
 	global isReadPipe
 	
+	if not send_mes_pipe:
+		log.info("Message pipe not configured")
+		return
+
 	try:
 		log.info("Start reading message")
 
