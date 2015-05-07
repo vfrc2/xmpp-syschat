@@ -2,6 +2,8 @@ import xmpp, sys, logging, os, threading, time
 import traceback
 import argparse
 import yaml
+import execute
+
 from chat import SysChat
 
 
@@ -12,6 +14,7 @@ log = logging.getLogger(__name__)
 args = None
 
 ch = None
+exe = None
 
 login = None
 password = None
@@ -38,17 +41,21 @@ def main():
 	global ch, keep_alive, keep_alive_interval
 	global send_user_list
 	
-	print "Jabber Sys Chat"
+	try:
+		print "Jabber Sys Chat"
 
-	args = parseArgs()
+		args = parseArgs()
 
-	if args.config:
 		loadConfig(args)
 
-	secure_black = False
-	secure_users = [] #[xmpp.JID("vfrc2@vfrc2.paata.ru")] #enable whitelist
-	
-	send_user_list = [xmpp.JID("vfrc2@vfrc2.paata.ru"),]
+		loadArgs()
+
+		checkConfig()
+
+	except Exception as err:
+		_logError("Error start: {0}", err)
+		return
+
 
 	while True:
 		try:
@@ -87,8 +94,6 @@ def setupChat(args=None):
 	ch = SysChat()
 
 	ch.user = login
-
-
 
 	if not server:
 		ch.server_url = login.getDomain()
@@ -204,7 +209,11 @@ def loadConfig(args):
 	global send_mes_pipe
 	global send_user_list
 
-	print args.config
+	if not args.config:
+		return
+
+	if not os.path.exists(args.config):
+		raise Exception("Can't find config file")
 
 	cfg = yaml.load(open(args.config))
 
@@ -244,9 +253,9 @@ def loadConfig(args):
 
 		if 'to' in cmessage_pipe.keys():
 			if type(cmessage_pipe['to']) == list:
-				send_user_list = cmessage_pipe['to']
+				send_user_list = [xmpp.JID(x) for x in cmessage_pipe['to']]
 			else:
-				send_user_list = [str(cmessage_pipe['to'])]
+				send_user_list = [xmpp.JID(str(cmessage_pipe['to']))]
 
 	ccommand = cfg['cmd_exec']
 
@@ -260,14 +269,56 @@ def loadConfig(args):
 
 		if 'users' in ccommand.keys():
 			if type(ccommand['users']) == list:
-				secure_users = ccommand['users']
+				secure_users = [xmpp.JID(x) for x in ccommand['users']]
 			else:
-				secure_users = [str(ccommand['users'])]
+				secure_users = [xmpp.JID(str(ccommand['users']))]
 
 
 
-def loadArgs(args):
+def loadArgs():
+	global args
+
+	global login
+	global password
+	global server
+
+	global chroot
+	global secure_black
+	global secure_users
+
+	global keep_alive 
+	global keep_alive_interval
+
+	global send_mes_pipe
+	global send_user_list
+
+	if args.user:
+		login = xmpp.JID(args.user)
+
+	if args.password:
+		password = args.password
+
+	if args.passfile:
+		password = open(args.passfile,'r').readline()
+
+	if args.xmpp_server:
+		server = args.xmpp_server
+
+	# if 'keepalive' in cxmpp.keys():
+	# 	keep_alive = cxmpp['keepalive']
+
+	# if 'keepalive-interval' in cxmpp.keys():
+	# 	keep_alive_interval = cxmpp['keepalive-interval']
+
 	pass
+
+def checkConfig():
+	global login
+	global password
+	global server
+
+	if not login or not password:
+		raise Exception('User and password not configured') 
 
 
 
@@ -279,11 +330,22 @@ def receiveMessageLoop():
 	while isReceiveMes:
 		try:
 			mes = ch.getMessage(timeout=0.5)
-			if mes:
+			
+			if mes and mes.getType() == 'chat' \
+				and mes.getBody():
+
 				u_from = mes.getFrom()
 				text = mes.getBody()
+
+				if not _checkUser(u_from):
+					log.info("Receive message from unathorized user %s", u_from)
+					ch.pushMessage("# You non-auth user!", user=u_from)
+					continue;
+	
+				#do work here
 				log.debug("Echo message %s from %s", text, u_from)
 				ch.pushMessage(text, user=u_from)
+				######
 		except Exception as exp:
 			_logError("Can't get message: {0}", exp)
 		pass
@@ -306,8 +368,12 @@ def fileMessagesLoop():
 		if not os.path.exists(send_mes_pipe):
 			log.debug("Create fifo pipe for messages")
 			os.mkfifo(send_mes_pipe)
+	except Exception as err:
+		_logError("Error create message pipe", err)
 
-		while isReadPipe:
+
+	while isReadPipe:
+		try:
 			log.debug("Waiting for message")
 			line = file(send_mes_pipe, "r").read()
 			if len(line) > 0:
@@ -315,10 +381,36 @@ def fileMessagesLoop():
 					mes = ch.createMessage(line, user=us)
 					ch.pushMessage(mes)
 			time.sleep(1)
-	except Exception as err:
-		_logError("Error create message pipe", err)
-
+		except Exception as err:
+			_logError("Error send mesage from message pipe: {0}", err)
+	
 	pass
+
+def _checkUser(user):
+	global secure_black
+	global secure_users
+
+	juser = user
+	if type(user) is str:
+		juser = xmpp.JID(user) 
+
+	suser = xmpp.JID('vfrc2-notebook@vfrc2.paata.ru')
+
+	print suser.bareMatch(juser)
+
+	print secure_black
+	print secure_users
+	print [juser]
+
+	if secure_black and not any(u.bareMatch(juser) for u in secure_users):
+		return True
+
+	if not secure_black and any(u.bareMatch(juser) for u in secure_users):
+		return True
+
+	return False
+
+
 
 def _logError(text, exp):
 	log.error(text.format(exp))
