@@ -50,7 +50,7 @@ class Executer(object):
 		if self.popen:
 			raise ExecuterAlreadyRunningException()
 
-		if command.lower() not in self.command_dict.keys():
+		if command.split()[0].lower() not in self.command_dict.keys():
 			raise ExecuterNoSuchCommandException()
 		
 		print "callback", message_callback
