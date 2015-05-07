@@ -26,7 +26,7 @@ class Executer(object):
 		super(Executer, self).__init__()
 		self.log = logging.getLogger(__name__)
 
-		self._initCommands(root_for_commands)
+		#self._initCommands(root_for_commands)
 
 		self.send_message = message_callback
 		self.command_queue = Queue.Queue()
@@ -50,12 +50,19 @@ class Executer(object):
 		if self.popen:
 			raise ExecuterAlreadyRunningException()
 
-		if command.split()[0].lower() not in self.command_dict.keys():
-			raise ExecuterNoSuchCommandException()
+		cmd_name = command.split()[0].lower()
+		cmd_args = command.split()[1:]
+
+		print cmd_name
+		print cmd_args
+		print self.command_dict
+
+		#if cmd_name not in self.command_dict.keys():
+		#	raise ExecuterNoSuchCommandException()
 		
 		print "callback", message_callback
 
-		self.command_queue.put([self.command_dict[command.lower()], 
+		self.command_queue.put([cmd_name,cmd_args, 
 			message_callback])
 		pass
 
@@ -67,14 +74,19 @@ class Executer(object):
 				item = self.command_queue.get(timeout=0.2)
 				
 				cmd = item[0]
+				args = item[1]
 				callback = self.send_message
 				
-				if item[1]:
-					callback = item[1]
+				if item[2]:
+					callback = item[2]
+
+				full_cmd = []
+				full_cmd.append(cmd)
+				for arg in args: full_cmd.append(arg)
 
 				self.log.debug("Start exec command %s", cmd[0])
 
-				self.popen = subprocess.Popen(cmd.split(), stdout=subprocess.PIPE, \
+				self.popen = subprocess.Popen(full_cmd, stdout=subprocess.PIPE, \
 					stderr=subprocess.STDOUT, cwd=self.chroot_dir, shell=False)
 
 				result = ""
