@@ -38,8 +38,8 @@ send_user_list = [] #user to send message from mes pipe
 
 def main():
 	global log, args
-	global ch, keep_alive, keep_alive_interval
-	global send_user_list
+	global ch, keep_alive, keep_alive_interval, chroot
+	global send_user_list, exe
 	
 	try:
 		print "Jabber Sys Chat"
@@ -51,6 +51,8 @@ def main():
 		loadArgs()
 
 		checkConfig()
+
+		exe = execute.Executer(chroot,getSendMessage(send_user_list))
 
 	except Exception as err:
 		_logError("Error start: {0}", err)
@@ -243,8 +245,6 @@ def loadConfig(args):
 
 	cmessage_pipe = cfg['message_pipe']
 
-	print cmessage_pipe
-
 	if cmessage_pipe:
 		if 'pipe-file' in cmessage_pipe.keys():
 			send_mes_pipe = cmessage_pipe['pipe-file']
@@ -325,7 +325,7 @@ def checkConfig():
 
 def receiveMessageLoop():
 
-	global isReceiveMes, ch
+	global isReceiveMes, ch, exe
 
 	while isReceiveMes:
 		try:
@@ -343,11 +343,18 @@ def receiveMessageLoop():
 					continue;
 	
 				#do work here
-				log.debug("Echo message %s from %s", text, u_from)
-				ch.pushMessage(text, user=u_from)
+				log.debug("Start cmd %s from %s", text, u_from)
+				# ch.pushMessage(text, user=u_from)
+				exe.StartExecCommand(text, getSendMessage([u_from]))
+	
 				######
+		except execute.ExecuterAlreadyRunningException as err:
+			ch.pushMessage("Already executing... To stop enter #!stop", user=u_from)
+		except execute.ExecuterNoSuchCommandException as err:
+			ch.pushMessage("No such command... try help", user=u_from) 
 		except Exception as exp:
 			_logError("Can't get message: {0}", exp)
+			ch.pushMessage(str(exp), user=u_from)
 		pass
 	pass
 
@@ -396,12 +403,6 @@ def _checkUser(user):
 
 	suser = xmpp.JID('vfrc2-notebook@vfrc2.paata.ru')
 
-	print suser.bareMatch(juser)
-
-	print secure_black
-	print secure_users
-	print [juser]
-
 	if secure_black and not any(u.bareMatch(juser) for u in secure_users):
 		return True
 
@@ -409,6 +410,18 @@ def _checkUser(user):
 		return True
 
 	return False
+
+def getSendMessage(users):
+
+	def _sendMessage(text):
+		global ch
+
+		if len(users)>0:
+			for u in users:
+				ch.pushMessage(text, user=u)
+
+	return _sendMessage
+
 
 
 

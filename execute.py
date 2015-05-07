@@ -38,7 +38,7 @@ class Executer(object):
 
 		
 
-	def StartExecCommand(self, command):
+	def StartExecCommand(self, command, message_callback=None):
 
 		if command == '#!stop':
 			if not self.popen:
@@ -52,8 +52,11 @@ class Executer(object):
 
 		if command.lower() not in self.command_dict.keys():
 			raise ExecuterNoSuchCommandException()
-			
-		self.command_queue.put(self.command_dict[command.lower()])
+		
+		print "callback", message_callback
+
+		self.command_queue.put([self.command_dict[command.lower()], 
+			message_callback])
 		pass
 
 	def _waitDoCommands(self):
@@ -61,8 +64,15 @@ class Executer(object):
 		while self.run:
 
 			try:
-				cmd = self.command_queue.get(timeout=0.2)
-				self.log.debug("Start exec command %s", cmd)
+				item = self.command_queue.get(timeout=0.2)
+				
+				cmd = item[0]
+				callback = self.send_message
+				
+				if item[1]:
+					callback = item[1]
+
+				self.log.debug("Start exec command %s", cmd[0])
 
 				self.popen = subprocess.Popen(cmd.split(), stdout=subprocess.PIPE, \
 					stderr=subprocess.STDOUT, cwd=self.chroot_dir, shell=False)
@@ -72,8 +82,8 @@ class Executer(object):
 				for line in self.popen.stdout.readlines(): result+=line
 
 				#event )))
-				if self.send_message:
-					self.send_message(result)
+				if callback:
+					callback(result)
 
 				self.popen = None
 
@@ -83,6 +93,8 @@ class Executer(object):
 				pass
 			except Exception as err:
 				self.log.error("Command exec error %s",err)
+				if callback:
+					callback(str(err))
 
 	def _initCommands(self,root_dir):
 
@@ -99,7 +111,7 @@ class Executer(object):
 					mode = st.st_mode
 
 					if mode & executable:
-						self.command_dict[filename] = os.path.fullname(filepath)
+						self.command_dict[filename] = os.path.abspath(filepath)
 
 		self.log.debug("Avalible commands" + str(self.command_dict))
 

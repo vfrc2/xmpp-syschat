@@ -12,7 +12,7 @@ message_pipe:
     - "vfrc2-notebook@vfrc2.paata.ru"
 
 cmd_exec:
-  chroot: "./commands"
+  chroot: "./bin"
   filter: allow #deny
   users: 
     - "vfrc2@vfrc2.paata.ru"
